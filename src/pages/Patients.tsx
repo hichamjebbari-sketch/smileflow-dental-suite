@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { mockPatients } from '@/data/mockData';
 import { Patient } from '@/types/clinic';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,14 +28,61 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, UserPlus, Phone, Mail, Edit, Trash2, Eye } from 'lucide-react';
+import { Search, UserPlus, Phone, Mail, Edit, Trash2, Eye, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Patients() {
-  const [patients, setPatients] = useState<Patient[]>(mockPatients);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  // جلب المرضى من قاعدة البيانات
+  const fetchPatients = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('patients')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // تحويل البيانات لتتوافق مع النوع Patient
+      const formattedPatients: Patient[] = (data || []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        phone: p.phone,
+        email: p.email || undefined,
+        dateOfBirth: p.date_of_birth || undefined,
+        gender: p.gender as 'male' | 'female',
+        address: p.address || undefined,
+        medicalHistory: p.medical_history || undefined,
+        createdAt: p.created_at?.split('T')[0] || '',
+        updatedAt: p.updated_at?.split('T')[0] || '',
+      }));
+
+      setPatients(formattedPatients);
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+      toast({
+        title: 'خطأ',
+        description: 'فشل في جلب بيانات المرضى',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPatients();
+  }, []);
 
   const filteredPatients = patients.filter(
     (patient) =>
@@ -45,27 +91,99 @@ export default function Patients() {
       patient.email?.includes(searchQuery)
   );
 
-  const handleAddPatient = (formData: FormData) => {
-    const newPatient: Patient = {
-      id: Date.now().toString(),
-      name: formData.get('name') as string,
-      phone: formData.get('phone') as string,
-      email: formData.get('email') as string,
-      dateOfBirth: formData.get('dateOfBirth') as string,
-      gender: formData.get('gender') as 'male' | 'female',
-      address: formData.get('address') as string,
-      medicalHistory: formData.get('medicalHistory') as string,
-      createdAt: new Date().toISOString().split('T')[0],
-      updatedAt: new Date().toISOString().split('T')[0],
-    };
-    setPatients([newPatient, ...patients]);
-    setIsDialogOpen(false);
-    setEditingPatient(null);
+  const handleAddPatient = async (formData: FormData) => {
+    try {
+      setSubmitting(true);
+      
+      const patientData = {
+        name: formData.get('name') as string,
+        phone: formData.get('phone') as string,
+        email: (formData.get('email') as string) || null,
+        date_of_birth: (formData.get('dateOfBirth') as string) || null,
+        gender: formData.get('gender') as 'male' | 'female',
+        address: (formData.get('address') as string) || null,
+        medical_history: (formData.get('medicalHistory') as string) || null,
+      };
+
+      if (editingPatient) {
+        // تحديث مريض موجود
+        const { error } = await supabase
+          .from('patients')
+          .update(patientData)
+          .eq('id', editingPatient.id);
+
+        if (error) throw error;
+
+        toast({
+          title: 'تم التحديث',
+          description: 'تم تحديث بيانات المريض بنجاح',
+        });
+      } else {
+        // إضافة مريض جديد
+        const { error } = await supabase
+          .from('patients')
+          .insert(patientData);
+
+        if (error) throw error;
+
+        toast({
+          title: 'تمت الإضافة',
+          description: 'تم إضافة المريض بنجاح',
+        });
+      }
+
+      setIsDialogOpen(false);
+      setEditingPatient(null);
+      fetchPatients(); // إعادة جلب البيانات
+    } catch (error: unknown) {
+      console.error('Error saving patient:', error);
+      const errorMessage = error instanceof Error ? error.message : 'فشل في حفظ بيانات المريض';
+      toast({
+        title: 'خطأ',
+        description: errorMessage.includes('duplicate') 
+          ? 'رقم الهاتف مسجل مسبقاً لمريض آخر' 
+          : errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDeletePatient = (id: string) => {
-    setPatients(patients.filter((p) => p.id !== id));
+  const handleDeletePatient = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('patients')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'تم الحذف',
+        description: 'تم حذف المريض بنجاح',
+      });
+
+      fetchPatients();
+    } catch (error) {
+      console.error('Error deleting patient:', error);
+      toast({
+        title: 'خطأ',
+        description: 'فشل في حذف المريض',
+        variant: 'destructive',
+      });
+    }
   };
+
+  if (loading) {
+    return (
+      <MainLayout title="إدارة المرضى" subtitle="عرض وإدارة ملفات المرضى">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout title="إدارة المرضى" subtitle="عرض وإدارة ملفات المرضى">
@@ -80,7 +198,10 @@ export default function Patients() {
             className="pr-10"
           />
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setEditingPatient(null);
+        }}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <UserPlus className="w-4 h-4" />
@@ -172,10 +293,12 @@ export default function Patients() {
                   type="button"
                   variant="outline"
                   onClick={() => setIsDialogOpen(false)}
+                  disabled={submitting}
                 >
                   إلغاء
                 </Button>
-                <Button type="submit">
+                <Button type="submit" disabled={submitting}>
+                  {submitting && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
                   {editingPatient ? 'حفظ التعديلات' : 'إضافة المريض'}
                 </Button>
               </div>
@@ -237,7 +360,7 @@ export default function Patients() {
                         : 'bg-pink-100 text-pink-700'
                     )}
                   >
-                    {patient.gender === 'male' ? 'ذكر' : 'أنثى'}
+                    {patient.gender === 'male' ? 'ذكر' : patient.gender === 'female' ? 'أنثى' : '-'}
                   </span>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
