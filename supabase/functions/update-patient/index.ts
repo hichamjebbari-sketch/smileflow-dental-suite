@@ -102,13 +102,13 @@ serve(async (req) => {
     }
 
     if (newPhone !== undefined) {
-      const phoneRegex = /^05\d{8}$/;
+      const phoneRegex = /^0\d{9}$/;
       if (!phoneRegex.test(newPhone.trim())) {
         return new Response(
           JSON.stringify({
             success: false,
             error: 'Invalid phone format',
-            message_ar: 'رقم الهاتف غير صحيح، يجب أن يبدأ بـ 05 ويتكون من 10 أرقام'
+            message_ar: 'رقم الهاتف غير صحيح، يجب أن يبدأ بـ 0 ويتكون من 10 أرقام'
           }),
           {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
