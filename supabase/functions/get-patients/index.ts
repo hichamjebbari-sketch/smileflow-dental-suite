@@ -1,55 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
-
-// Mock patients data
-const patients = [
-  {
-    id: '1',
-    name: 'أحمد محمد العلي',
-    phone: '0501234567',
-    email: 'ahmed@email.com',
-    dateOfBirth: '1985-03-15',
-    gender: 'male',
-    address: 'الرياض، حي النخيل',
-    medicalHistory: 'لا يوجد أمراض مزمنة',
-    createdAt: '2024-01-15',
-  },
-  {
-    id: '2',
-    name: 'فاطمة عبدالله السعيد',
-    phone: '0559876543',
-    email: 'fatima@email.com',
-    dateOfBirth: '1990-07-22',
-    gender: 'female',
-    address: 'الرياض، حي الياسمين',
-    medicalHistory: 'حساسية من البنسلين',
-    createdAt: '2024-01-20',
-  },
-  {
-    id: '3',
-    name: 'خالد سعود المطيري',
-    phone: '0541112233',
-    email: 'khaled@email.com',
-    dateOfBirth: '1978-11-08',
-    gender: 'male',
-    address: 'الرياض، حي الملقا',
-    createdAt: '2024-02-01',
-  },
-  {
-    id: '4',
-    name: 'نورة محمد الشمري',
-    phone: '0567778899',
-    email: 'noura@email.com',
-    dateOfBirth: '1995-04-12',
-    gender: 'female',
-    address: 'الرياض، حي الربوة',
-    createdAt: '2024-02-10',
-  },
-];
 
 // حساب العمر من تاريخ الميلاد
 function calculateAge(dateOfBirth: string): number {
@@ -69,6 +24,11 @@ serve(async (req) => {
   }
 
   try {
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
     const url = new URL(req.url);
     const id = url.searchParams.get('id');
     const phone = url.searchParams.get('phone');
@@ -77,9 +37,19 @@ serve(async (req) => {
 
     // البحث عن مريض محدد بالـ ID أو رقم الهاتف
     if (id || phone) {
-      const patient = patients.find(p => 
-        (id && p.id === id) || (phone && p.phone === phone)
-      );
+      let query = supabase.from('patients').select('*');
+      
+      if (id) {
+        query = query.eq('id', id);
+      } else if (phone) {
+        query = query.eq('phone', phone);
+      }
+
+      const { data: patient, error } = await query.maybeSingle();
+
+      if (error) {
+        throw error;
+      }
 
       if (!patient) {
         return new Response(
@@ -105,10 +75,10 @@ serve(async (req) => {
             phone: patient.phone,
             email: patient.email || '',
             gender: patient.gender === 'male' ? 'ذكر' : 'أنثى',
-            age: patient.dateOfBirth ? calculateAge(patient.dateOfBirth) : null,
+            age: patient.date_of_birth ? calculateAge(patient.date_of_birth) : null,
             address: patient.address || '',
-            medical_history: patient.medicalHistory || 'لا يوجد',
-            registered_date: patient.createdAt,
+            medical_history: patient.medical_history || 'لا يوجد',
+            registered_date: patient.created_at,
           },
           message_ar: `تم العثور على ملف المريض: ${patient.name}`
         }),
@@ -119,24 +89,31 @@ serve(async (req) => {
       );
     }
 
-    let filteredPatients = [...patients];
+    // جلب جميع المرضى
+    let query = supabase.from('patients').select('*').order('created_at', { ascending: false });
 
     if (gender) {
-      filteredPatients = filteredPatients.filter(p => p.gender === gender);
+      query = query.eq('gender', gender);
+    }
+
+    const { data: patients, error } = await query;
+
+    if (error) {
+      throw error;
     }
 
     // Table format - returns array of objects like n8n table view
     if (format === 'sheet') {
-      const tableData = filteredPatients.map(p => ({
+      const tableData = (patients || []).map(p => ({
         id: p.id,
         name: p.name,
         phone: p.phone,
         email: p.email || '',
-        date_of_birth: p.dateOfBirth || '',
+        date_of_birth: p.date_of_birth || '',
         gender: p.gender === 'male' ? 'ذكر' : 'أنثى',
         address: p.address || '',
-        medical_history: p.medicalHistory || '',
-        created_at: p.createdAt,
+        medical_history: p.medical_history || '',
+        created_at: p.created_at,
       }));
 
       return new Response(
@@ -152,8 +129,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        data: filteredPatients,
-        total: filteredPatients.length,
+        data: patients || [],
+        total: patients?.length || 0,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
