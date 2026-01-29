@@ -2,3 +2,6 @@ project_id = "bablutkomioidokmrmmr"
 
 [functions.get-services]
 verify_jwt = false
+
+[functions.get-patients]
+verify_jwt = false
