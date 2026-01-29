@@ -229,7 +229,7 @@ export default function Visits() {
                   <TableCell>
                     <div className="flex items-center gap-1 font-semibold text-primary">
                       <Banknote className="w-4 h-4" />
-                      {visit.totalCost} ر.س
+                      {visit.totalCost} درهم
                     </div>
                   </TableCell>
                 </TableRow>

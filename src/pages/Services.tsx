@@ -122,7 +122,7 @@ export default function Services() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="price">السعر (ر.س)</Label>
+                  <Label htmlFor="price">السعر (درهم)</Label>
                   <Input
                     id="price"
                     name="price"
@@ -208,7 +208,7 @@ export default function Services() {
               <div className="flex items-center gap-1.5 text-sm">
                 <Banknote className="w-4 h-4 text-primary" />
                 <span className="font-bold text-lg">{service.price}</span>
-                <span className="text-muted-foreground">ر.س</span>
+                <span className="text-muted-foreground">درهم</span>
               </div>
               <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                 <Clock className="w-4 h-4" />
