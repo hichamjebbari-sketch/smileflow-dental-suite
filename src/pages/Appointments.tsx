@@ -154,7 +154,7 @@ export default function Appointments() {
                     <SelectContent>
                       {mockServices.map((service) => (
                         <SelectItem key={service.id} value={service.id}>
-                          {service.name} - {service.price} ر.س
+                          {service.name} - {service.price} درهم
                         </SelectItem>
                       ))}
                     </SelectContent>

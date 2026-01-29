@@ -33,7 +33,7 @@ export default function Dashboard() {
         />
         <StatCard
           title="إيرادات الشهر"
-          value={`${mockDashboardStats.monthlyRevenue.toLocaleString()} ر.س`}
+          value={`${mockDashboardStats.monthlyRevenue.toLocaleString()} درهم`}
           icon={<Banknote className="w-6 h-6" />}
           trend={{ value: 8, isPositive: true }}
         />
