@@ -1,1 +1,4 @@
 project_id = "bablutkomioidokmrmmr"
+
+[functions.get-services]
+verify_jwt = false
