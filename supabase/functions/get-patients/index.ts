@@ -51,6 +51,18 @@ const patients = [
   },
 ];
 
+// حساب العمر من تاريخ الميلاد
+function calculateAge(dateOfBirth: string): number {
+  const today = new Date();
+  const birthDate = new Date(dateOfBirth);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -58,8 +70,54 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
+    const id = url.searchParams.get('id');
+    const phone = url.searchParams.get('phone');
     const gender = url.searchParams.get('gender');
     const format = url.searchParams.get('format');
+
+    // البحث عن مريض محدد بالـ ID أو رقم الهاتف
+    if (id || phone) {
+      const patient = patients.find(p => 
+        (id && p.id === id) || (phone && p.phone === phone)
+      );
+
+      if (!patient) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'لم يتم العثور على المريض',
+            message_ar: 'المريض غير موجود في النظام'
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 404,
+          }
+        );
+      }
+
+      // إرجاع بيانات المريض بشكل مبسط للوكيل الذكي
+      return new Response(
+        JSON.stringify({
+          success: true,
+          patient: {
+            id: patient.id,
+            name: patient.name,
+            phone: patient.phone,
+            email: patient.email || '',
+            gender: patient.gender === 'male' ? 'ذكر' : 'أنثى',
+            age: patient.dateOfBirth ? calculateAge(patient.dateOfBirth) : null,
+            address: patient.address || '',
+            medical_history: patient.medicalHistory || 'لا يوجد',
+            registered_date: patient.createdAt,
+          },
+          message_ar: `تم العثور على ملف المريض: ${patient.name}`
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
+    }
 
     let filteredPatients = [...patients];
 
