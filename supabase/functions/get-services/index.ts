@@ -73,6 +73,7 @@ serve(async (req) => {
     const url = new URL(req.url);
     const category = url.searchParams.get('category');
     const activeOnly = url.searchParams.get('active') === 'true';
+    const format = url.searchParams.get('format'); // 'sheet' for Google Sheets format
 
     let filteredServices = [...services];
 
@@ -86,6 +87,34 @@ serve(async (req) => {
       filteredServices = filteredServices.filter(s => s.isActive);
     }
 
+    // Google Sheets / Table format
+    if (format === 'sheet') {
+      const headers = ['الرقم', 'اسم الخدمة', 'الوصف', 'السعر (درهم)', 'المدة (دقيقة)', 'الفئة', 'الحالة'];
+      const rows = filteredServices.map(s => [
+        s.id,
+        s.name,
+        s.description || '',
+        s.price,
+        s.duration,
+        s.category,
+        s.isActive ? 'نشط' : 'غير نشط'
+      ]);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          headers: headers,
+          rows: rows,
+          total: rows.length,
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
+    }
+
+    // Default JSON format
     return new Response(
       JSON.stringify({
         success: true,
