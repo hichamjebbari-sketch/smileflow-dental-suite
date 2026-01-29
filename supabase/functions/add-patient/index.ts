@@ -1,18 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
-
-// قائمة المرضى المؤقتة (في الواقع ستكون في قاعدة البيانات)
-const patients: Array<{
-  id: string;
-  name: string;
-  phone: string;
-  gender?: string;
-  createdAt: string;
-}> = [];
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -34,8 +26,13 @@ serve(async (req) => {
   }
 
   try {
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
     const body = await req.json();
-    const { name, phone, gender } = body;
+    const { name, phone, gender, email, date_of_birth, address, medical_history } = body;
 
     // التحقق من البيانات المطلوبة
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -97,17 +94,47 @@ serve(async (req) => {
       );
     }
 
-    // إنشاء مريض جديد
-    const newPatient = {
-      id: crypto.randomUUID(),
+    // التحقق من أن رقم الهاتف غير مستخدم
+    const { data: existingPatient } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('phone', phone.trim())
+      .maybeSingle();
+
+    if (existingPatient) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Phone already exists',
+          message_ar: 'رقم الهاتف مسجل مسبقاً لمريض آخر'
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 409,
+        }
+      );
+    }
+
+    // إنشاء مريض جديد في قاعدة البيانات
+    const newPatientData = {
       name: name.trim(),
       phone: phone.trim(),
-      gender: gender === 'male' || gender === 'female' ? gender : undefined,
-      createdAt: new Date().toISOString().split('T')[0],
+      gender: gender === 'male' || gender === 'female' ? gender : null,
+      email: email?.trim() || null,
+      date_of_birth: date_of_birth || null,
+      address: address?.trim() || null,
+      medical_history: medical_history?.trim() || null,
     };
 
-    // في الواقع سيتم حفظه في قاعدة البيانات
-    patients.push(newPatient);
+    const { data: newPatient, error } = await supabase
+      .from('patients')
+      .insert(newPatientData)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
 
     return new Response(
       JSON.stringify({
@@ -116,8 +143,9 @@ serve(async (req) => {
           id: newPatient.id,
           name: newPatient.name,
           phone: newPatient.phone,
+          email: newPatient.email || '',
           gender: newPatient.gender === 'male' ? 'ذكر' : newPatient.gender === 'female' ? 'أنثى' : 'غير محدد',
-          registered_date: newPatient.createdAt,
+          registered_date: newPatient.created_at,
         },
         message_ar: `تم تسجيل المريض ${newPatient.name} بنجاح`
       }),
