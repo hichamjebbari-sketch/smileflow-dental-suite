@@ -63,14 +63,14 @@ serve(async (req) => {
       );
     }
 
-    // التحقق من صحة رقم الهاتف (أرقام فقط، 10 خانات تبدأ بـ 05)
-    const phoneRegex = /^05\d{8}$/;
+    // التحقق من صحة رقم الهاتف (أرقام فقط، 10 خانات تبدأ بـ 0)
+    const phoneRegex = /^0\d{9}$/;
     if (!phoneRegex.test(phone.trim())) {
       return new Response(
         JSON.stringify({
           success: false,
           error: 'Invalid phone format',
-          message_ar: 'رقم الهاتف غير صحيح، يجب أن يبدأ بـ 05 ويتكون من 10 أرقام'
+          message_ar: 'رقم الهاتف غير صحيح، يجب أن يبدأ بـ 0 ويتكون من 10 أرقام'
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
