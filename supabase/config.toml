@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.add-patient]
 verify_jwt = false
+
+[functions.update-patient]
+verify_jwt = false
