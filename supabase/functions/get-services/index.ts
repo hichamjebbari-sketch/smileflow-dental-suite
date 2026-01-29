@@ -87,26 +87,20 @@ serve(async (req) => {
       filteredServices = filteredServices.filter(s => s.isActive);
     }
 
-    // Google Sheets / Table format
+    // Google Sheets / Table format - returns array of objects like n8n table view
     if (format === 'sheet') {
-      const headers = ['الرقم', 'اسم الخدمة', 'الوصف', 'السعر (درهم)', 'المدة (دقيقة)', 'الفئة', 'الحالة'];
-      const rows = filteredServices.map(s => [
-        s.id,
-        s.name,
-        s.description || '',
-        s.price,
-        s.duration,
-        s.category,
-        s.isActive ? 'نشط' : 'غير نشط'
-      ]);
+      const tableData = filteredServices.map(s => ({
+        id: s.id,
+        name: s.name,
+        description: s.description || '',
+        price: s.price,
+        duration_minutes: s.duration,
+        category: s.category,
+        status: s.isActive ? 'نشط' : 'غير نشط',
+      }));
 
       return new Response(
-        JSON.stringify({
-          success: true,
-          headers: headers,
-          rows: rows,
-          total: rows.length,
-        }),
+        JSON.stringify(tableData),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 200,
