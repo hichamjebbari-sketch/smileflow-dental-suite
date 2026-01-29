@@ -5,35 +5,37 @@ import { QuickActions } from '@/components/dashboard/QuickActions';
 import { RecentPatients } from '@/components/dashboard/RecentPatients';
 import { mockDashboardStats, mockAppointments, mockPatients } from '@/data/mockData';
 import { Users, Calendar, Clock, Banknote } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function Dashboard() {
+  const { t } = useLanguage();
   const todayAppointments = mockAppointments.filter(
     (apt) => apt.date === '2024-01-29'
   );
 
   return (
-    <MainLayout title="لوحة التحكم" subtitle="مرحباً بك في نظام إدارة العيادة">
+    <MainLayout title={t('dashboard.title')} subtitle={t('dashboard.subtitle')}>
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
-          title="إجمالي المرضى"
+          title={t('dashboard.totalPatients')}
           value={mockDashboardStats.totalPatients}
           icon={<Users className="w-6 h-6" />}
           trend={{ value: 12, isPositive: true }}
         />
         <StatCard
-          title="مواعيد اليوم"
+          title={t('dashboard.todayAppointments')}
           value={mockDashboardStats.todayAppointments}
           icon={<Calendar className="w-6 h-6" />}
         />
         <StatCard
-          title="مواعيد قيد الانتظار"
+          title={t('dashboard.pendingAppointments')}
           value={mockDashboardStats.pendingAppointments}
           icon={<Clock className="w-6 h-6" />}
         />
         <StatCard
-          title="إيرادات الشهر"
-          value={`${mockDashboardStats.monthlyRevenue.toLocaleString()} درهم`}
+          title={t('dashboard.monthlyRevenue')}
+          value={`${mockDashboardStats.monthlyRevenue.toLocaleString()} ${t('common.currency')}`}
           icon={<Banknote className="w-6 h-6" />}
           trend={{ value: 8, isPositive: true }}
         />

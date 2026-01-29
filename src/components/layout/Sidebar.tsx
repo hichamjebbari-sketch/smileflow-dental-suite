@@ -10,29 +10,32 @@ import {
   Settings,
   ChevronRight,
   ChevronLeft,
-  Menu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/contexts/LanguageContext';
 
-const navItems = [
-  { path: '/', label: 'لوحة التحكم', icon: LayoutDashboard },
-  { path: '/patients', label: 'المرضى', icon: Users },
-  { path: '/appointments', label: 'المواعيد', icon: Calendar },
-  { path: '/services', label: 'الخدمات', icon: Stethoscope },
-  { path: '/visits', label: 'الزيارات', icon: ClipboardList },
-  { path: '/ai-assistant', label: 'المساعد الذكي', icon: Bot },
-  { path: '/settings', label: 'الإعدادات', icon: Settings },
+const getNavItems = (t: (key: string) => string) => [
+  { path: '/', label: t('nav.dashboard'), icon: LayoutDashboard },
+  { path: '/patients', label: t('nav.patients'), icon: Users },
+  { path: '/appointments', label: t('nav.appointments'), icon: Calendar },
+  { path: '/services', label: t('nav.services'), icon: Stethoscope },
+  { path: '/visits', label: t('nav.visits'), icon: ClipboardList },
+  { path: '/ai-assistant', label: t('nav.aiAssistant'), icon: Bot },
+  { path: '/settings', label: t('nav.settings'), icon: Settings },
 ];
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { t, dir } = useLanguage();
+  const navItems = getNavItems(t);
 
   return (
     <aside
       className={cn(
-        'h-screen gradient-sidebar border-l border-sidebar-border flex flex-col transition-all duration-300 sticky top-0',
+        'h-screen gradient-sidebar flex flex-col transition-all duration-300 sticky top-0',
+        dir === 'rtl' ? 'border-l border-sidebar-border' : 'border-r border-sidebar-border',
         collapsed ? 'w-20' : 'w-64'
       )}
     >
@@ -44,8 +47,8 @@ export function Sidebar() {
           </div>
           {!collapsed && (
             <div className="animate-fade-in">
-              <h1 className="font-bold text-sidebar-foreground text-lg">عيادة الأسنان</h1>
-              <p className="text-xs text-sidebar-foreground/60">نظام الإدارة</p>
+              <h1 className="font-bold text-sidebar-foreground text-lg">{t('clinic.name')}</h1>
+              <p className="text-xs text-sidebar-foreground/60">{t('clinic.system')}</p>
             </div>
           )}
         </div>
@@ -83,11 +86,11 @@ export function Sidebar() {
           className="w-full text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
         >
           {collapsed ? (
-            <ChevronLeft className="w-5 h-5" />
+            dir === 'rtl' ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />
           ) : (
             <>
-              <ChevronRight className="w-5 h-5 ml-2" />
-              <span>طي القائمة</span>
+              {dir === 'rtl' ? <ChevronRight className="w-5 h-5 ml-2" /> : <ChevronLeft className="w-5 h-5 mr-2" />}
+              <span>{t('nav.collapse')}</span>
             </>
           )}
         </Button>

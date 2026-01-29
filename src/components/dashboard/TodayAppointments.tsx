@@ -2,47 +2,50 @@ import { Clock, User, Stethoscope, CheckCircle2, XCircle, AlertCircle } from 'lu
 import { Appointment } from '@/types/clinic';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface TodayAppointmentsProps {
   appointments: Appointment[];
 }
 
-const statusConfig = {
-  scheduled: {
-    label: 'مجدول',
-    icon: AlertCircle,
-    className: 'bg-warning/10 text-warning',
-  },
-  confirmed: {
-    label: 'مؤكد',
-    icon: CheckCircle2,
-    className: 'bg-success/10 text-success',
-  },
-  completed: {
-    label: 'مكتمل',
-    icon: CheckCircle2,
-    className: 'bg-muted text-muted-foreground',
-  },
-  cancelled: {
-    label: 'ملغي',
-    icon: XCircle,
-    className: 'bg-destructive/10 text-destructive',
-  },
-};
-
 export function TodayAppointments({ appointments }: TodayAppointmentsProps) {
+  const { t } = useLanguage();
+
+  const statusConfig = {
+    scheduled: {
+      label: t('status.scheduled'),
+      icon: AlertCircle,
+      className: 'bg-warning/10 text-warning',
+    },
+    confirmed: {
+      label: t('status.confirmed'),
+      icon: CheckCircle2,
+      className: 'bg-success/10 text-success',
+    },
+    completed: {
+      label: t('status.completed'),
+      icon: CheckCircle2,
+      className: 'bg-muted text-muted-foreground',
+    },
+    cancelled: {
+      label: t('status.cancelled'),
+      icon: XCircle,
+      className: 'bg-destructive/10 text-destructive',
+    },
+  };
+
   return (
     <div className="bg-card rounded-xl shadow-card border border-border/50 overflow-hidden">
       <div className="p-4 border-b border-border flex items-center justify-between">
-        <h3 className="font-semibold text-lg">مواعيد اليوم</h3>
+        <h3 className="font-semibold text-lg">{t('dashboard.todayAppointmentsList')}</h3>
         <Button variant="ghost" size="sm" className="text-primary">
-          عرض الكل
+          {t('dashboard.viewAll')}
         </Button>
       </div>
       <div className="divide-y divide-border">
         {appointments.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
-            لا توجد مواعيد اليوم
+            {t('dashboard.noAppointments')}
           </div>
         ) : (
           appointments.map((appointment, index) => {
@@ -59,7 +62,7 @@ export function TodayAppointments({ appointments }: TodayAppointmentsProps) {
                   {/* Time */}
                   <div className="text-center min-w-[60px]">
                     <p className="text-lg font-bold text-primary">{appointment.time}</p>
-                    <p className="text-xs text-muted-foreground">{appointment.duration} دقيقة</p>
+                    <p className="text-xs text-muted-foreground">{appointment.duration} {t('common.minutes')}</p>
                   </div>
 
                   {/* Divider */}

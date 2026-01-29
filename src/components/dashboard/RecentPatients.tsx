@@ -1,8 +1,9 @@
 import { Patient } from '@/types/clinic';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Phone, Mail, ChevronLeft } from 'lucide-react';
+import { Phone, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface RecentPatientsProps {
   patients: Patient[];
@@ -10,13 +11,14 @@ interface RecentPatientsProps {
 
 export function RecentPatients({ patients }: RecentPatientsProps) {
   const navigate = useNavigate();
+  const { t, dir } = useLanguage();
 
   return (
     <div className="bg-card rounded-xl shadow-card border border-border/50 overflow-hidden">
       <div className="p-4 border-b border-border flex items-center justify-between">
-        <h3 className="font-semibold text-lg">المرضى الجدد</h3>
+        <h3 className="font-semibold text-lg">{t('dashboard.recentPatients')}</h3>
         <Button variant="ghost" size="sm" className="text-primary" onClick={() => navigate('/patients')}>
-          عرض الكل
+          {t('dashboard.viewAll')}
         </Button>
       </div>
       <div className="divide-y divide-border">
@@ -42,7 +44,11 @@ export function RecentPatients({ patients }: RecentPatientsProps) {
                   </span>
                 </div>
               </div>
-              <ChevronLeft className="w-5 h-5 text-muted-foreground" />
+              {dir === 'rtl' ? (
+                <ChevronLeft className="w-5 h-5 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              )}
             </div>
           </div>
         ))}
