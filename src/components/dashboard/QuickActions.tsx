@@ -1,31 +1,33 @@
 import { UserPlus, CalendarPlus, ClipboardPlus, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export function QuickActions() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const actions = [
     {
-      label: 'مريض جديد',
+      label: t('dashboard.newPatient'),
       icon: UserPlus,
       onClick: () => navigate('/patients?action=new'),
       variant: 'default' as const,
     },
     {
-      label: 'موعد جديد',
+      label: t('dashboard.newAppointment'),
       icon: CalendarPlus,
       onClick: () => navigate('/appointments?action=new'),
       variant: 'outline' as const,
     },
     {
-      label: 'تسجيل زيارة',
+      label: t('dashboard.recordVisit'),
       icon: ClipboardPlus,
       onClick: () => navigate('/visits?action=new'),
       variant: 'outline' as const,
     },
     {
-      label: 'المساعد الذكي',
+      label: t('dashboard.aiAssistant'),
       icon: Bot,
       onClick: () => navigate('/ai-assistant'),
       variant: 'outline' as const,
@@ -34,7 +36,7 @@ export function QuickActions() {
 
   return (
     <div className="bg-card rounded-xl shadow-card border border-border/50 p-4">
-      <h3 className="font-semibold text-lg mb-4">إجراءات سريعة</h3>
+      <h3 className="font-semibold text-lg mb-4">{t('dashboard.quickActions')}</h3>
       <div className="grid grid-cols-2 gap-3">
         {actions.map((action) => {
           const Icon = action.icon;

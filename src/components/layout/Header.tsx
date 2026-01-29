@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface HeaderProps {
   title: string;
@@ -17,6 +18,8 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle }: HeaderProps) {
+  const { t, dir } = useLanguage();
+
   return (
     <header className="bg-card border-b border-border px-6 py-4">
       <div className="flex items-center justify-between">
@@ -32,17 +35,17 @@ export function Header({ title, subtitle }: HeaderProps) {
         <div className="flex items-center gap-4">
           {/* Search */}
           <div className="relative hidden md:block">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground ${dir === 'rtl' ? 'right-3' : 'left-3'}`} />
             <Input
-              placeholder="بحث..."
-              className="pr-10 w-64 bg-secondary/50 border-0"
+              placeholder={t('common.search')}
+              className={`w-64 bg-secondary/50 border-0 ${dir === 'rtl' ? 'pr-10' : 'pl-10'}`}
             />
           </div>
 
           {/* Notifications */}
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="w-5 h-5" />
-            <span className="absolute top-1 left-1 w-2 h-2 bg-destructive rounded-full" />
+            <span className={`absolute top-1 w-2 h-2 bg-destructive rounded-full ${dir === 'rtl' ? 'left-1' : 'right-1'}`} />
           </Button>
 
           {/* User Menu */}
@@ -57,17 +60,17 @@ export function Header({ title, subtitle }: HeaderProps) {
                 <span className="hidden md:inline font-medium">د. سارة أحمد</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuLabel>حسابي</DropdownMenuLabel>
+            <DropdownMenuContent align={dir === 'rtl' ? 'start' : 'end'} className="w-48">
+              <DropdownMenuLabel>{t('header.myAccount')}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>
-                <User className="w-4 h-4 ml-2" />
-                الملف الشخصي
+                <User className={`w-4 h-4 ${dir === 'rtl' ? 'ml-2' : 'mr-2'}`} />
+                {t('header.profile')}
               </DropdownMenuItem>
-              <DropdownMenuItem>الإعدادات</DropdownMenuItem>
+              <DropdownMenuItem>{t('nav.settings')}</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive">
-                تسجيل الخروج
+                {t('header.logout')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
