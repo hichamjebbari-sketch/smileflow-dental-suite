@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,12 +12,75 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Building2, Bell, Shield, Languages, Globe, Save } from 'lucide-react';
+import { Building2, Bell, Shield, Languages, Globe, Save, Send, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useSettings } from '@/hooks/useSettings';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Settings() {
   const { language, setLanguage, t } = useLanguage();
+  const { settings, loading, saving, saveClinicSettings, saveWebhookSettings, testWebhook } = useSettings();
+
+  // Local state for form inputs
+  const [clinicName, setClinicName] = useState('');
+  const [clinicPhone, setClinicPhone] = useState('');
+  const [clinicEmail, setClinicEmail] = useState('');
+  const [clinicAddress, setClinicAddress] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [agentEnabled, setAgentEnabled] = useState(true);
+  const [testingWebhook, setTestingWebhook] = useState(false);
+
+  // Sync local state with fetched settings
+  useEffect(() => {
+    if (!loading) {
+      setClinicName(settings.clinic_name);
+      setClinicPhone(settings.clinic_phone);
+      setClinicEmail(settings.clinic_email);
+      setClinicAddress(settings.clinic_address);
+      setWebhookUrl(settings.webhook_url);
+      setAgentEnabled(settings.agent_enabled);
+    }
+  }, [loading, settings]);
+
+  const handleSaveClinic = async () => {
+    await saveClinicSettings({
+      clinic_name: clinicName,
+      clinic_phone: clinicPhone,
+      clinic_email: clinicEmail,
+      clinic_address: clinicAddress,
+    });
+  };
+
+  const handleSaveWebhook = async () => {
+    await saveWebhookSettings(webhookUrl, agentEnabled);
+  };
+
+  const handleTestWebhook = async () => {
+    setTestingWebhook(true);
+    await testWebhook();
+    setTestingWebhook(false);
+  };
+
+  if (loading) {
+    return (
+      <MainLayout title={t('settings.title')} subtitle={t('settings.subtitle')}>
+        <div className="max-w-4xl space-y-6">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Card key={i} className="shadow-card border-border/50">
+              <CardHeader>
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-4 w-64 mt-2" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-10 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout title={t('settings.title')} subtitle={t('settings.subtitle')}>
@@ -51,6 +115,7 @@ export default function Settings() {
             </RadioGroup>
           </CardContent>
         </Card>
+
         {/* Clinic Info */}
         <Card className="shadow-card border-border/50">
           <CardHeader>
@@ -68,24 +133,41 @@ export default function Settings() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="clinicName">{t('settings.clinicName')}</Label>
-                <Input id="clinicName" defaultValue="عيادة الأسنان المتقدمة" />
+                <Input 
+                  id="clinicName" 
+                  value={clinicName}
+                  onChange={(e) => setClinicName(e.target.value)}
+                />
               </div>
               <div>
                 <Label htmlFor="phone">{t('settings.phone')}</Label>
-                <Input id="phone" defaultValue="0112345678" />
+                <Input 
+                  id="phone" 
+                  value={clinicPhone}
+                  onChange={(e) => setClinicPhone(e.target.value)}
+                />
               </div>
               <div>
                 <Label htmlFor="email">{t('settings.email')}</Label>
-                <Input id="email" type="email" defaultValue="info@dentalclinic.sa" />
+                <Input 
+                  id="email" 
+                  type="email" 
+                  value={clinicEmail}
+                  onChange={(e) => setClinicEmail(e.target.value)}
+                />
               </div>
               <div>
                 <Label htmlFor="address">{t('settings.address')}</Label>
-                <Input id="address" defaultValue="الرياض، حي النخيل" />
+                <Input 
+                  id="address" 
+                  value={clinicAddress}
+                  onChange={(e) => setClinicAddress(e.target.value)}
+                />
               </div>
             </div>
             <div className="flex justify-end">
-              <Button className="gap-2">
-                <Save className="w-4 h-4" />
+              <Button onClick={handleSaveClinic} disabled={saving} className="gap-2">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {t('settings.saveChanges')}
               </Button>
             </div>
@@ -177,7 +259,7 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* AI Integration */}
+        {/* AI Integration - Webhook */}
         <Card className="shadow-card border-border/50">
           <CardHeader>
             <div className="flex items-center gap-3">
@@ -193,11 +275,24 @@ export default function Settings() {
           <CardContent className="space-y-4">
             <div>
               <Label htmlFor="webhookUrl">{t('settings.webhookUrl')}</Label>
-              <Input
-                id="webhookUrl"
-                placeholder="https://n8n.example.com/webhook/..."
-                className="font-mono text-sm"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="webhookUrl"
+                  placeholder="https://n8n.example.com/webhook/..."
+                  className="font-mono text-sm flex-1"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                />
+                <Button 
+                  variant="outline" 
+                  onClick={handleTestWebhook}
+                  disabled={testingWebhook || !webhookUrl}
+                  className="gap-2"
+                >
+                  {testingWebhook ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  اختبار
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground mt-1">
                 {t('settings.webhookUrlDesc')}
               </p>
@@ -209,11 +304,14 @@ export default function Settings() {
                   {t('settings.enableAgentDesc')}
                 </p>
               </div>
-              <Switch defaultChecked />
+              <Switch 
+                checked={agentEnabled}
+                onCheckedChange={setAgentEnabled}
+              />
             </div>
             <div className="flex justify-end">
-              <Button className="gap-2">
-                <Save className="w-4 h-4" />
+              <Button onClick={handleSaveWebhook} disabled={saving} className="gap-2">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {t('settings.saveSettings')}
               </Button>
             </div>
