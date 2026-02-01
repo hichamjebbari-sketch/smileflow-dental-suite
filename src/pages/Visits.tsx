@@ -1,7 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { mockVisits, mockPatients, mockServices } from '@/data/mockData';
-import { Visit } from '@/types/clinic';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -28,46 +26,178 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ClipboardPlus, Calendar, User, Stethoscope, FileText, Banknote, Search } from 'lucide-react';
+import { ClipboardPlus, Calendar, User, Stethoscope, Banknote, Search, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import type { Tables } from '@/integrations/supabase/types';
+
+type Patient = Tables<'patients'>;
+type Service = Tables<'services'>;
+type Visit = Tables<'visits'> & {
+  patients?: { name: string } | null;
+};
+type VisitService = Tables<'visit_services'> & {
+  services?: { name: string } | null;
+};
 
 export default function Visits() {
-  const [visits, setVisits] = useState<Visit[]>(mockVisits);
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const [visitServices, setVisitServices] = useState<Record<string, VisitService[]>>({});
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      const [visitsRes, patientsRes, servicesRes] = await Promise.all([
+        supabase
+          .from('visits')
+          .select(`
+            *,
+            patients(name)
+          `)
+          .order('date', { ascending: false }),
+        supabase
+          .from('patients')
+          .select('*')
+          .order('name'),
+        supabase
+          .from('services')
+          .select('*')
+          .eq('is_active', true)
+          .order('name'),
+      ]);
+
+      if (visitsRes.error) throw visitsRes.error;
+      if (patientsRes.error) throw patientsRes.error;
+      if (servicesRes.error) throw servicesRes.error;
+
+      setVisits(visitsRes.data || []);
+      setPatients(patientsRes.data || []);
+      setServices(servicesRes.data || []);
+
+      // Fetch visit services for all visits
+      if (visitsRes.data && visitsRes.data.length > 0) {
+        const visitIds = visitsRes.data.map(v => v.id);
+        const { data: vsData, error: vsError } = await supabase
+          .from('visit_services')
+          .select(`
+            *,
+            services(name)
+          `)
+          .in('visit_id', visitIds);
+
+        if (vsError) throw vsError;
+
+        // Group by visit_id
+        const grouped: Record<string, VisitService[]> = {};
+        (vsData || []).forEach(vs => {
+          if (!grouped[vs.visit_id]) {
+            grouped[vs.visit_id] = [];
+          }
+          grouped[vs.visit_id].push(vs);
+        });
+        setVisitServices(grouped);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({
+        title: 'خطأ',
+        description: 'فشل في جلب البيانات',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const filteredVisits = visits.filter((visit) => {
-    const patient = mockPatients.find((p) => p.id === visit.patientId);
+    const patientName = visit.patients?.name || '';
     return (
-      patient?.name.includes(searchQuery) ||
+      patientName.includes(searchQuery) ||
       visit.diagnosis?.includes(searchQuery) ||
       visit.treatment?.includes(searchQuery)
     );
   });
 
-  const handleAddVisit = (formData: FormData) => {
-    const patientId = formData.get('patientId') as string;
-    const serviceIds = formData.getAll('services') as string[];
+  const handleAddVisit = async (formData: FormData) => {
+    try {
+      setSubmitting(true);
+      
+      const patientId = formData.get('patientId') as string;
+      const serviceId = formData.get('services') as string;
+      const selectedService = services.find((s) => s.id === serviceId);
+      const totalCost = selectedService ? Number(selectedService.price) : 0;
 
-    const selectedServices = mockServices.filter((s) =>
-      serviceIds.includes(s.id)
-    );
-    const totalCost = selectedServices.reduce((sum, s) => sum + s.price, 0);
+      // Create visit
+      const { data: visitData, error: visitError } = await supabase
+        .from('visits')
+        .insert({
+          patient_id: patientId,
+          date: formData.get('date') as string,
+          diagnosis: (formData.get('diagnosis') as string) || null,
+          treatment: (formData.get('treatment') as string) || null,
+          notes: (formData.get('notes') as string) || null,
+          total_cost: totalCost,
+          doctor_name: 'د. سارة أحمد',
+        })
+        .select()
+        .single();
 
-    const newVisit: Visit = {
-      id: Date.now().toString(),
-      patientId,
-      date: formData.get('date') as string,
-      services: selectedServices.map((s) => s.name),
-      diagnosis: formData.get('diagnosis') as string,
-      treatment: formData.get('treatment') as string,
-      notes: formData.get('notes') as string,
-      totalCost,
-      doctorName: 'د. سارة أحمد',
-    };
+      if (visitError) throw visitError;
 
-    setVisits([newVisit, ...visits]);
-    setIsDialogOpen(false);
+      // Add visit service
+      if (selectedService && visitData) {
+        const { error: vsError } = await supabase
+          .from('visit_services')
+          .insert({
+            visit_id: visitData.id,
+            service_id: selectedService.id,
+            price_at_time: Number(selectedService.price),
+            quantity: 1,
+          });
+
+        if (vsError) throw vsError;
+      }
+
+      toast({
+        title: 'تم التسجيل',
+        description: 'تم تسجيل الزيارة بنجاح',
+      });
+
+      setIsDialogOpen(false);
+      fetchData();
+    } catch (error) {
+      console.error('Error adding visit:', error);
+      toast({
+        title: 'خطأ',
+        description: 'فشل في تسجيل الزيارة',
+        variant: 'destructive',
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <MainLayout title="سجل الزيارات" subtitle="متابعة وتسجيل زيارات المرضى">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout title="سجل الزيارات" subtitle="متابعة وتسجيل زيارات المرضى">
@@ -108,7 +238,7 @@ export default function Visits() {
                       <SelectValue placeholder="اختر المريض" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockPatients.map((patient) => (
+                      {patients.map((patient) => (
                         <SelectItem key={patient.id} value={patient.id}>
                           {patient.name}
                         </SelectItem>
@@ -127,15 +257,15 @@ export default function Visits() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="services">الخدمات</Label>
+                  <Label htmlFor="services">الخدمة</Label>
                   <Select name="services" required>
                     <SelectTrigger>
-                      <SelectValue placeholder="اختر الخدمات" />
+                      <SelectValue placeholder="اختر الخدمة" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockServices.map((service) => (
+                      {services.map((service) => (
                         <SelectItem key={service.id} value={service.id}>
-                          {service.name}
+                          {service.name} - {Number(service.price)} درهم
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -159,10 +289,14 @@ export default function Visits() {
                   type="button"
                   variant="outline"
                   onClick={() => setIsDialogOpen(false)}
+                  disabled={submitting}
                 >
                   إلغاء
                 </Button>
-                <Button type="submit">تسجيل الزيارة</Button>
+                <Button type="submit" disabled={submitting}>
+                  {submitting && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                  تسجيل الزيارة
+                </Button>
               </div>
             </form>
           </DialogContent>
@@ -184,7 +318,7 @@ export default function Visits() {
           </TableHeader>
           <TableBody>
             {filteredVisits.map((visit, index) => {
-              const patient = mockPatients.find((p) => p.id === visit.patientId);
+              const visitServicesList = visitServices[visit.id] || [];
               return (
                 <TableRow
                   key={visit.id}
@@ -200,19 +334,22 @@ export default function Visits() {
                   <TableCell>
                     <div className="flex items-center gap-1.5">
                       <User className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">{patient?.name}</span>
+                      <span className="font-medium">{visit.patients?.name || 'غير محدد'}</span>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {visit.services.map((service, i) => (
+                      {visitServicesList.map((vs) => (
                         <span
-                          key={i}
+                          key={vs.id}
                           className="px-2 py-0.5 bg-accent text-accent-foreground rounded-full text-xs"
                         >
-                          {service}
+                          {vs.services?.name || 'خدمة'}
                         </span>
                       ))}
+                      {visitServicesList.length === 0 && (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="max-w-[200px]">
@@ -223,13 +360,13 @@ export default function Visits() {
                   <TableCell>
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <Stethoscope className="w-4 h-4" />
-                      {visit.doctorName}
+                      {visit.doctor_name}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1 font-semibold text-primary">
                       <Banknote className="w-4 h-4" />
-                      {visit.totalCost} درهم
+                      {Number(visit.total_cost)} درهم
                     </div>
                   </TableCell>
                 </TableRow>

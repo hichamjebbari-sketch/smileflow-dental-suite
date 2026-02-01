@@ -1,7 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { mockServices } from '@/data/mockData';
-import { Service } from '@/types/clinic';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -14,8 +12,13 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Edit, Trash2, Clock, Banknote, Tag } from 'lucide-react';
+import { Plus, Edit, Trash2, Clock, Banknote, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import type { Tables } from '@/integrations/supabase/types';
+
+type Service = Tables<'services'>;
 
 const categoryColors: Record<string, string> = {
   'وقائي': 'bg-blue-100 text-blue-700',
@@ -23,44 +26,152 @@ const categoryColors: Record<string, string> = {
   'تجميلي': 'bg-purple-100 text-purple-700',
   'جراحي': 'bg-red-100 text-red-700',
   'تعويضي': 'bg-amber-100 text-amber-700',
+  'عام': 'bg-muted text-muted-foreground',
 };
 
 export default function Services() {
-  const [services, setServices] = useState<Service[]>(mockServices);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
 
-  const handleAddService = (formData: FormData) => {
-    const newService: Service = {
-      id: editingService?.id || Date.now().toString(),
-      name: formData.get('name') as string,
-      description: formData.get('description') as string,
-      price: parseInt(formData.get('price') as string),
-      duration: parseInt(formData.get('duration') as string),
-      category: formData.get('category') as string,
-      isActive: true,
-    };
+  const fetchServices = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (editingService) {
-      setServices(services.map((s) => (s.id === editingService.id ? newService : s)));
-    } else {
-      setServices([...services, newService]);
+      if (error) throw error;
+      setServices(data || []);
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      toast({
+        title: 'خطأ',
+        description: 'فشل في جلب بيانات الخدمات',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
     }
-    setIsDialogOpen(false);
-    setEditingService(null);
   };
 
-  const handleDeleteService = (id: string) => {
-    setServices(services.filter((s) => s.id !== id));
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const handleAddService = async (formData: FormData) => {
+    try {
+      setSubmitting(true);
+      
+      const serviceData = {
+        name: formData.get('name') as string,
+        description: (formData.get('description') as string) || null,
+        price: parseFloat(formData.get('price') as string),
+        duration: parseInt(formData.get('duration') as string),
+        category: formData.get('category') as string,
+        is_active: true,
+      };
+
+      if (editingService) {
+        const { error } = await supabase
+          .from('services')
+          .update(serviceData)
+          .eq('id', editingService.id);
+
+        if (error) throw error;
+
+        toast({
+          title: 'تم التحديث',
+          description: 'تم تحديث بيانات الخدمة بنجاح',
+        });
+      } else {
+        const { error } = await supabase
+          .from('services')
+          .insert(serviceData);
+
+        if (error) throw error;
+
+        toast({
+          title: 'تمت الإضافة',
+          description: 'تم إضافة الخدمة بنجاح',
+        });
+      }
+
+      setIsDialogOpen(false);
+      setEditingService(null);
+      fetchServices();
+    } catch (error) {
+      console.error('Error saving service:', error);
+      toast({
+        title: 'خطأ',
+        description: 'فشل في حفظ بيانات الخدمة',
+        variant: 'destructive',
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleToggleActive = (id: string) => {
-    setServices(
-      services.map((s) => (s.id === id ? { ...s, isActive: !s.isActive } : s))
-    );
+  const handleDeleteService = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('services')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'تم الحذف',
+        description: 'تم حذف الخدمة بنجاح',
+      });
+
+      fetchServices();
+    } catch (error) {
+      console.error('Error deleting service:', error);
+      toast({
+        title: 'خطأ',
+        description: 'فشل في حذف الخدمة',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleToggleActive = async (id: string, currentState: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('services')
+        .update({ is_active: !currentState })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      fetchServices();
+    } catch (error) {
+      console.error('Error toggling service:', error);
+      toast({
+        title: 'خطأ',
+        description: 'فشل في تحديث حالة الخدمة',
+        variant: 'destructive',
+      });
+    }
   };
 
   const categories = [...new Set(services.map((s) => s.category))];
+
+  if (loading) {
+    return (
+      <MainLayout title="الخدمات والأسعار" subtitle="إدارة خدمات العيادة والأسعار">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout title="الخدمات والأسعار" subtitle="إدارة خدمات العيادة والأسعار">
@@ -79,12 +190,12 @@ export default function Services() {
             </span>
           ))}
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setEditingService(null);
+        }}>
           <DialogTrigger asChild>
-            <Button
-              className="gap-2"
-              onClick={() => setEditingService(null)}
-            >
+            <Button className="gap-2">
               <Plus className="w-4 h-4" />
               إضافة خدمة
             </Button>
@@ -116,7 +227,7 @@ export default function Services() {
                 <Textarea
                   id="description"
                   name="description"
-                  defaultValue={editingService?.description}
+                  defaultValue={editingService?.description || ''}
                   rows={2}
                 />
               </div>
@@ -127,6 +238,7 @@ export default function Services() {
                     id="price"
                     name="price"
                     type="number"
+                    step="0.01"
                     defaultValue={editingService?.price}
                     required
                   />
@@ -157,10 +269,12 @@ export default function Services() {
                   type="button"
                   variant="outline"
                   onClick={() => setIsDialogOpen(false)}
+                  disabled={submitting}
                 >
                   إلغاء
                 </Button>
-                <Button type="submit">
+                <Button type="submit" disabled={submitting}>
+                  {submitting && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
                   {editingService ? 'حفظ التعديلات' : 'إضافة الخدمة'}
                 </Button>
               </div>
@@ -176,7 +290,7 @@ export default function Services() {
             key={service.id}
             className={cn(
               'bg-card rounded-xl shadow-card border border-border/50 p-5 animate-slide-up transition-all',
-              !service.isActive && 'opacity-60'
+              !service.is_active && 'opacity-60'
             )}
             style={{ animationDelay: `${index * 50}ms` }}
           >
@@ -193,8 +307,8 @@ export default function Services() {
                 </span>
               </div>
               <Switch
-                checked={service.isActive}
-                onCheckedChange={() => handleToggleActive(service.id)}
+                checked={service.is_active}
+                onCheckedChange={() => handleToggleActive(service.id, service.is_active)}
               />
             </div>
 
@@ -207,7 +321,7 @@ export default function Services() {
             <div className="flex items-center gap-4 mb-4">
               <div className="flex items-center gap-1.5 text-sm">
                 <Banknote className="w-4 h-4 text-primary" />
-                <span className="font-bold text-lg">{service.price}</span>
+                <span className="font-bold text-lg">{Number(service.price)}</span>
                 <span className="text-muted-foreground">درهم</span>
               </div>
               <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -241,6 +355,12 @@ export default function Services() {
           </div>
         ))}
       </div>
+
+      {services.length === 0 && (
+        <div className="bg-card rounded-xl p-12 text-center text-muted-foreground">
+          لا توجد خدمات مسجلة
+        </div>
+      )}
     </MainLayout>
   );
 }

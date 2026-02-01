@@ -1,7 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { mockAppointments, mockPatients, mockServices } from '@/data/mockData';
-import { Appointment } from '@/types/clinic';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -20,9 +18,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarPlus, Clock, User, Stethoscope, CheckCircle2, XCircle, AlertCircle, Filter } from 'lucide-react';
+import { CalendarPlus, Clock, User, Stethoscope, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import type { Tables } from '@/integrations/supabase/types';
+
+type Patient = Tables<'patients'>;
+type Service = Tables<'services'>;
+type Appointment = Tables<'appointments'> & {
+  patients?: { name: string } | null;
+  services?: { name: string; duration: number } | null;
+};
 
 const statusConfig = {
   scheduled: {
@@ -48,44 +56,133 @@ const statusConfig = {
 };
 
 export default function Appointments() {
-  const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      const [appointmentsRes, patientsRes, servicesRes] = await Promise.all([
+        supabase
+          .from('appointments')
+          .select(`
+            *,
+            patients(name),
+            services(name, duration)
+          `)
+          .order('date', { ascending: true })
+          .order('time', { ascending: true }),
+        supabase
+          .from('patients')
+          .select('*')
+          .order('name'),
+        supabase
+          .from('services')
+          .select('*')
+          .eq('is_active', true)
+          .order('name'),
+      ]);
+
+      if (appointmentsRes.error) throw appointmentsRes.error;
+      if (patientsRes.error) throw patientsRes.error;
+      if (servicesRes.error) throw servicesRes.error;
+
+      setAppointments(appointmentsRes.data || []);
+      setPatients(patientsRes.data || []);
+      setServices(servicesRes.data || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({
+        title: 'خطأ',
+        description: 'فشل في جلب البيانات',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const filteredAppointments = appointments.filter(
     (apt) => filterStatus === 'all' || apt.status === filterStatus
   );
 
-  const handleAddAppointment = (formData: FormData) => {
-    const patientId = formData.get('patientId') as string;
-    const serviceId = formData.get('serviceId') as string;
-    const patient = mockPatients.find((p) => p.id === patientId);
-    const service = mockServices.find((s) => s.id === serviceId);
+  const handleAddAppointment = async (formData: FormData) => {
+    try {
+      setSubmitting(true);
+      
+      const patientId = formData.get('patientId') as string;
+      const serviceId = formData.get('serviceId') as string;
+      const selectedService = services.find((s) => s.id === serviceId);
 
-    const newAppointment: Appointment = {
-      id: Date.now().toString(),
-      patientId,
-      patientName: patient?.name || '',
-      date: formData.get('date') as string,
-      time: formData.get('time') as string,
-      duration: service?.duration || 30,
-      serviceId,
-      serviceName: service?.name || '',
-      status: 'scheduled',
-      notes: formData.get('notes') as string,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
+      const appointmentData = {
+        patient_id: patientId,
+        service_id: serviceId || null,
+        date: formData.get('date') as string,
+        time: formData.get('time') as string,
+        duration: selectedService?.duration || 30,
+        status: 'scheduled',
+        notes: (formData.get('notes') as string) || null,
+      };
 
-    setAppointments([newAppointment, ...appointments]);
-    setIsDialogOpen(false);
+      const { error } = await supabase
+        .from('appointments')
+        .insert(appointmentData);
+
+      if (error) throw error;
+
+      toast({
+        title: 'تمت الإضافة',
+        description: 'تم إضافة الموعد بنجاح',
+      });
+
+      setIsDialogOpen(false);
+      fetchData();
+    } catch (error) {
+      console.error('Error adding appointment:', error);
+      toast({
+        title: 'خطأ',
+        description: 'فشل في إضافة الموعد',
+        variant: 'destructive',
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleStatusChange = (id: string, status: Appointment['status']) => {
-    setAppointments(
-      appointments.map((apt) =>
-        apt.id === id ? { ...apt, status } : apt
-      )
-    );
+  const handleStatusChange = async (id: string, status: string) => {
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ status })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'تم التحديث',
+        description: 'تم تحديث حالة الموعد',
+      });
+
+      fetchData();
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast({
+        title: 'خطأ',
+        description: 'فشل في تحديث الحالة',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Group appointments by date
@@ -96,6 +193,16 @@ export default function Appointments() {
     acc[apt.date].push(apt);
     return acc;
   }, {} as Record<string, Appointment[]>);
+
+  if (loading) {
+    return (
+      <MainLayout title="إدارة المواعيد" subtitle="عرض وإدارة مواعيد المرضى">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout title="إدارة المواعيد" subtitle="عرض وإدارة مواعيد المرضى">
@@ -137,7 +244,7 @@ export default function Appointments() {
                       <SelectValue placeholder="اختر المريض" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockPatients.map((patient) => (
+                      {patients.map((patient) => (
                         <SelectItem key={patient.id} value={patient.id}>
                           {patient.name}
                         </SelectItem>
@@ -152,9 +259,9 @@ export default function Appointments() {
                       <SelectValue placeholder="اختر الخدمة" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockServices.map((service) => (
+                      {services.map((service) => (
                         <SelectItem key={service.id} value={service.id}>
-                          {service.name} - {service.price} درهم
+                          {service.name} - {Number(service.price)} درهم
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -178,10 +285,14 @@ export default function Appointments() {
                   type="button"
                   variant="outline"
                   onClick={() => setIsDialogOpen(false)}
+                  disabled={submitting}
                 >
                   إلغاء
                 </Button>
-                <Button type="submit">إضافة الموعد</Button>
+                <Button type="submit" disabled={submitting}>
+                  {submitting && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                  إضافة الموعد
+                </Button>
               </div>
             </form>
           </DialogContent>
@@ -204,7 +315,7 @@ export default function Appointments() {
               </h3>
               <div className="grid gap-3">
                 {dayAppointments.map((appointment) => {
-                  const status = statusConfig[appointment.status];
+                  const status = statusConfig[appointment.status as keyof typeof statusConfig] || statusConfig.scheduled;
                   const StatusIcon = status.icon;
 
                   return (
@@ -216,7 +327,7 @@ export default function Appointments() {
                         {/* Time */}
                         <div className="text-center min-w-[80px] py-2 px-3 bg-primary/5 rounded-lg">
                           <p className="text-xl font-bold text-primary">
-                            {appointment.time}
+                            {appointment.time?.slice(0, 5)}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {appointment.duration} دقيقة
@@ -228,12 +339,12 @@ export default function Appointments() {
                           <div className="flex items-center gap-2 mb-1">
                             <User className="w-4 h-4 text-muted-foreground" />
                             <span className="font-medium text-lg">
-                              {appointment.patientName}
+                              {appointment.patients?.name || 'غير محدد'}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Stethoscope className="w-4 h-4" />
-                            <span>{appointment.serviceName}</span>
+                            <span>{appointment.services?.name || 'غير محدد'}</span>
                           </div>
                         </div>
 
