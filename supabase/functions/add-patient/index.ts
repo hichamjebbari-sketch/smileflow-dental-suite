@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWebhookNotification } from "../_shared/webhook.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -136,6 +137,18 @@ serve(async (req) => {
       throw error;
     }
 
+    // إرسال إشعار للـ webhook
+    const webhookResult = await sendWebhookNotification(supabase, 'new_patient', {
+      patient_id: newPatient.id,
+      patient_name: newPatient.name,
+      patient_phone: newPatient.phone,
+      patient_email: newPatient.email || '',
+      patient_gender: newPatient.gender === 'male' ? 'ذكر' : newPatient.gender === 'female' ? 'أنثى' : 'غير محدد',
+      registered_date: newPatient.created_at,
+    });
+
+    console.log('Webhook result:', webhookResult);
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -147,7 +160,8 @@ serve(async (req) => {
           gender: newPatient.gender === 'male' ? 'ذكر' : newPatient.gender === 'female' ? 'أنثى' : 'غير محدد',
           registered_date: newPatient.created_at,
         },
-        message_ar: `تم تسجيل المريض ${newPatient.name} بنجاح`
+        message_ar: `تم تسجيل المريض ${newPatient.name} بنجاح`,
+        webhook_sent: webhookResult.success && !webhookResult.skipped,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
