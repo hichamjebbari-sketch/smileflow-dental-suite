@@ -137,14 +137,18 @@ serve(async (req) => {
       throw error;
     }
 
-    // إرسال إشعار للـ webhook
+    // إرسال إشعار للـ webhook - جميع بيانات المريض
     const webhookResult = await sendWebhookNotification(supabase, 'new_patient', {
       patient_id: newPatient.id,
       patient_name: newPatient.name,
       patient_phone: newPatient.phone,
       patient_email: newPatient.email || '',
       patient_gender: newPatient.gender === 'male' ? 'ذكر' : newPatient.gender === 'female' ? 'أنثى' : 'غير محدد',
+      patient_date_of_birth: newPatient.date_of_birth || '',
+      patient_address: newPatient.address || '',
+      patient_medical_history: newPatient.medical_history || '',
       registered_date: newPatient.created_at,
+      updated_at: newPatient.updated_at,
     });
 
     console.log('Webhook result:', webhookResult);

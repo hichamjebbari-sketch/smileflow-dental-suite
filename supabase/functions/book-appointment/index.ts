@@ -183,7 +183,7 @@ serve(async (req) => {
       throw insertError;
     }
 
-    // إرسال إشعار للـ webhook
+    // إرسال إشعار للـ webhook - جميع بيانات الموعد
     const webhookResult = await sendWebhookNotification(supabase, 'new_appointment', {
       appointment_id: newAppointment.id,
       patient_id: patient.id,
@@ -193,7 +193,10 @@ serve(async (req) => {
       time: newAppointment.time,
       duration: newAppointment.duration,
       status: newAppointment.status,
-      notes: newAppointment.notes,
+      notes: newAppointment.notes || '',
+      service_id: newAppointment.service_id || '',
+      created_at: newAppointment.created_at,
+      updated_at: newAppointment.updated_at,
     });
 
     console.log('Webhook result:', webhookResult);
