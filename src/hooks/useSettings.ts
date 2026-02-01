@@ -185,14 +185,18 @@ export function useSettings() {
       const result = data as WebhookTestResult;
 
       if (result.success) {
+        const details = `Status: ${result.status_code} | Response: ${result.response_body?.substring(0, 80) || 'N/A'}`;
         toast({
           title: 'نجح الاتصال ✓',
-          description: result.message_ar,
+          description: `${result.message_ar}\n${details}`,
         });
       } else {
+        const details = result.status_code 
+          ? `Status: ${result.status_code} | Response: ${result.response_body?.substring(0, 80) || 'N/A'}`
+          : result.error || '';
         toast({
           title: 'فشل الاتصال',
-          description: result.message_ar,
+          description: `${result.message_ar}${details ? '\n' + details : ''}`,
           variant: 'destructive',
         });
       }
