@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWebhookNotification } from "../_shared/webhook.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -202,6 +203,22 @@ serve(async (req) => {
       throw updateError;
     }
 
+    // إرسال إشعار للـ webhook - جميع بيانات المريض المحدثة
+    const webhookResult = await sendWebhookNotification(supabase, 'update_patient', {
+      patient_id: updatedPatient.id,
+      patient_name: updatedPatient.name,
+      patient_phone: updatedPatient.phone,
+      patient_email: updatedPatient.email || '',
+      patient_gender: updatedPatient.gender === 'male' ? 'ذكر' : updatedPatient.gender === 'female' ? 'أنثى' : 'غير محدد',
+      patient_date_of_birth: updatedPatient.date_of_birth || '',
+      patient_address: updatedPatient.address || '',
+      patient_medical_history: updatedPatient.medical_history || '',
+      registered_date: updatedPatient.created_at,
+      updated_at: updatedPatient.updated_at,
+    });
+
+    console.log('Webhook result:', webhookResult);
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -216,7 +233,8 @@ serve(async (req) => {
           medical_history: updatedPatient.medical_history || '',
           updated_at: updatedPatient.updated_at,
         },
-        message_ar: `تم تحديث بيانات المريض ${updatedPatient.name} بنجاح`
+        message_ar: `تم تحديث بيانات المريض ${updatedPatient.name} بنجاح`,
+        webhook_sent: webhookResult.success && !webhookResult.skipped,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
