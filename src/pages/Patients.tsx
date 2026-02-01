@@ -115,12 +115,17 @@ export default function Patients() {
           }
         );
 
+        // معالجة أخطاء الشبكة
         if (error) throw error;
-        if (!data?.success) throw new Error(data?.message_ar || 'فشل في تحديث البيانات');
+        
+        // معالجة أخطاء التحقق من البيانات
+        if (data && !data.success) {
+          throw new Error(data.message_ar || data.error || 'فشل في تحديث البيانات');
+        }
 
         toast({
           title: 'تم التحديث',
-          description: data.message_ar || 'تم تحديث بيانات المريض بنجاح',
+          description: data?.message_ar || 'تم تحديث بيانات المريض بنجاح',
         });
       } else {
         // إضافة مريض جديد عبر Edge Function لإرسال webhook
@@ -128,12 +133,17 @@ export default function Patients() {
           body: patientData,
         });
 
+        // معالجة أخطاء الشبكة
         if (error) throw error;
-        if (!data?.success) throw new Error(data?.message_ar || 'فشل في إضافة المريض');
+        
+        // معالجة أخطاء التحقق من البيانات (مثل رقم هاتف مكرر)
+        if (data && !data.success) {
+          throw new Error(data.message_ar || data.error || 'فشل في إضافة المريض');
+        }
 
         toast({
           title: 'تمت الإضافة',
-          description: data.message_ar || 'تم إضافة المريض بنجاح',
+          description: data?.message_ar || 'تم إضافة المريض بنجاح',
         });
       }
 
