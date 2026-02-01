@@ -106,29 +106,34 @@ export default function Patients() {
       };
 
       if (editingPatient) {
-        // تحديث مريض موجود
-        const { error } = await supabase
-          .from('patients')
-          .update(patientData)
-          .eq('id', editingPatient.id);
+        // تحديث مريض موجود عبر Edge Function لإرسال webhook
+        const { data, error } = await supabase.functions.invoke(
+          `update-patient?id=${editingPatient.id}`,
+          {
+            method: 'PUT',
+            body: patientData,
+          }
+        );
 
         if (error) throw error;
+        if (!data?.success) throw new Error(data?.message_ar || 'فشل في تحديث البيانات');
 
         toast({
           title: 'تم التحديث',
-          description: 'تم تحديث بيانات المريض بنجاح',
+          description: data.message_ar || 'تم تحديث بيانات المريض بنجاح',
         });
       } else {
-        // إضافة مريض جديد
-        const { error } = await supabase
-          .from('patients')
-          .insert(patientData);
+        // إضافة مريض جديد عبر Edge Function لإرسال webhook
+        const { data, error } = await supabase.functions.invoke('add-patient', {
+          body: patientData,
+        });
 
         if (error) throw error;
+        if (!data?.success) throw new Error(data?.message_ar || 'فشل في إضافة المريض');
 
         toast({
           title: 'تمت الإضافة',
-          description: 'تم إضافة المريض بنجاح',
+          description: data.message_ar || 'تم إضافة المريض بنجاح',
         });
       }
 
@@ -140,7 +145,7 @@ export default function Patients() {
       const errorMessage = error instanceof Error ? error.message : 'فشل في حفظ بيانات المريض';
       toast({
         title: 'خطأ',
-        description: errorMessage.includes('duplicate') 
+        description: errorMessage.includes('duplicate') || errorMessage.includes('مسجل مسبقاً')
           ? 'رقم الهاتف مسجل مسبقاً لمريض آخر' 
           : errorMessage,
         variant: 'destructive',
