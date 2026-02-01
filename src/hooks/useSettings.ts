@@ -2,6 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+interface WebhookTestResult {
+  success: boolean;
+  message_ar: string;
+  status_code?: number;
+  response_body?: string;
+  error?: string;
+}
+
 interface Settings {
   webhook_url: string;
   agent_enabled: boolean;
@@ -152,44 +160,57 @@ export function useSettings() {
     }
   };
 
-  const testWebhook = async () => {
+  const testWebhook = async (): Promise<WebhookTestResult> => {
     if (!settings.webhook_url) {
+      const result: WebhookTestResult = {
+        success: false,
+        message_ar: 'يرجى إدخال رابط الـ webhook أولاً',
+      };
       toast({
         title: 'خطأ',
-        description: 'يرجى إدخال رابط الـ webhook أولاً',
+        description: result.message_ar,
         variant: 'destructive',
       });
-      return false;
+      return result;
     }
 
     try {
-      const response = await fetch(settings.webhook_url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        mode: 'no-cors',
-        body: JSON.stringify({
-          type: 'test',
-          message: 'اختبار الاتصال من نظام العيادة',
-          timestamp: new Date().toISOString(),
-        }),
-      });
+      // استخدام Edge Function لتجنب مشاكل CORS
+      const { data, error } = await supabase.functions.invoke('test-webhook');
 
-      toast({
-        title: 'تم الإرسال',
-        description: 'تم إرسال طلب الاختبار. تحقق من n8n للتأكد من الاستلام.',
-      });
+      if (error) {
+        throw error;
+      }
 
-      return true;
+      const result = data as WebhookTestResult;
+
+      if (result.success) {
+        toast({
+          title: 'نجح الاتصال ✓',
+          description: result.message_ar,
+        });
+      } else {
+        toast({
+          title: 'فشل الاتصال',
+          description: result.message_ar,
+          variant: 'destructive',
+        });
+      }
+
+      return result;
     } catch (error) {
       console.error('Error testing webhook:', error);
+      const result: WebhookTestResult = {
+        success: false,
+        message_ar: 'حدث خطأ أثناء اختبار الـ webhook',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
       toast({
         title: 'خطأ',
-        description: 'فشل في إرسال طلب الاختبار. تحقق من الرابط.',
+        description: result.message_ar,
         variant: 'destructive',
       });
-      return false;
+      return result;
     }
   };
 
